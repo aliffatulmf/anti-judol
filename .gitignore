@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Data files
+*.csv
+*.joblib
+*.pt
+
+# IDE-specific files
+.*-guidelines
+
+# Virtual environments
+.venv
+
+# Temporary files
+bin/
+temp/
+downloaded_files/

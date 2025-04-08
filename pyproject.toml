@@ -1,0 +1,23 @@
+[project]
+name = "anti-judol"
+version = "0.1.0"
+description = "stop judol"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx[http2]==0.28.1",
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "scikit-learn==1.5.1",
+    "seleniumbase==4.37.1",
+    "tqdm==4.67.1",
+    "unidecode==1.3.8",
+    "nlp-id==0.1.18.0",
+    "pytest>=8.3.5",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel==6.29.5",
+    "pytest-cov>=6.1.1",
+]
