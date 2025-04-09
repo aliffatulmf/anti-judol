@@ -1,69 +1,53 @@
-import psutil
-import os
 import logging
+import subprocess
+import platform
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def find_and_terminate_process(process_name, target_path, force_kill=False):
-    target_path = os.path.normcase(os.path.abspath(target_path))
+def find_and_terminate(process_name, force_kill=False):
+    os_type = platform.system().lower()
     found = False
 
-    for proc in psutil.process_iter(['pid', 'name', 'exe']):
-        try:
-            pinfo = proc.info
-            if pinfo['name'].lower() != process_name.lower():
-                continue
+    try:
+        if os_type == 'windows':
+            cmd = ['taskkill']
+            if force_kill:
+                cmd.append('/F')
+            cmd.extend(['/IM', process_name])
 
-            exe_path = pinfo.get('exe', '')
-            if not exe_path:
-                continue
+            logger.info(f"Executing command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
-            if os.path.normcase(exe_path) == target_path:
-                pid = pinfo['pid']
-                logger.info(f"Found process {pinfo['name']} (PID: {pid})")
+            if result.returncode == 0:
+                logger.info(f"Process '{process_name}' successfully terminated.")
+                found = True
+            elif "not found" in result.stderr.lower():
+                logger.warning(f"Process '{process_name}' not found.")
+            else:
+                logger.error(f"Failed to terminate process: {result.stderr}")
 
-                try:
-                    if force_kill:
-                        logger.info("Force killing process...")
-                        proc.kill()
-                    else:
-                        logger.info("Terminating process safely...")
-                        proc.terminate()
-                        # Wait 5 seconds for the process to terminate gracefully
-                        proc.wait(timeout=5)
+        elif os_type == 'linux' or os_type == 'darwin':
+            if force_kill:
+                cmd = ['pkill', '-9', '-f', process_name]
+            else:
+                cmd = ['pkill', '-f', process_name]
 
-                    logger.info(f"Process {pid} successfully terminated.")
-                    found = True
-                except psutil.TimeoutExpired:
-                    if not force_kill:
-                        logger.warning("Process not responding, force killing...")
-                        proc.kill()
-                        logger.info(f"Process {pid} forcefully terminated.")
-                        found = True
-                except psutil.NoSuchProcess:
-                    logger.info(f"Process {pid} is no longer running.")
-                except psutil.AccessDenied:
-                    logger.error("Permission denied to terminate this process.")
-                except Exception as e:
-                    logger.error(f"Failed to terminate process: {str(e)}")
-                finally:
-                    break  # Stop searching after process is terminated
-        except (psutil.NoSuchProcess, psutil.AccessDenied, KeyError):
-            continue
+            logger.info(f"Executing command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True)
 
-    if not found:
-        logger.warning(f"Process '{process_name}' with path {target_path} not found.")
+            if result.returncode == 0:
+                logger.info(f"Process '{process_name}' successfully terminated.")
+                found = True
+            elif result.returncode == 1:
+                logger.warning(f"Process '{process_name}' not found.")
+            else:
+                logger.error(f"Failed to terminate process: {result.stderr}")
+        else:
+            logger.error(f"Unsupported operating system: {os_type}")
+    except Exception as e:
+        logger.error(f"Error terminating process: {str(e)}")
 
-# if __name__ == "__main__":
-#     target_process = "chrome.exe"
-#     target_path = r"D:\chrome\chrome.exe"
-
-#     # Usage examples:
-#     # 1. Terminate process normally (default)
-#     #find_and_terminate_process(target_process, target_path)
-
-#     # 2. Force kill process
-#     #find_and_terminate_process(target_process, target_path, force_kill=True)
+    return found

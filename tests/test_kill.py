@@ -1,0 +1,90 @@
+
+import platform
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from anti_judol.kill import find_and_terminate
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+class TestFindAndTerminate:
+
+    @pytest.fixture
+    def mock_subprocess_run(self):
+        with patch('subprocess.run') as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            mock_run.return_value = mock_result
+            yield mock_run
+
+    def test_find_and_terminate_windows(self, mock_subprocess_run):
+        with patch('platform.system', return_value='Windows'):
+            result = find_and_terminate('test.exe')
+            assert result is True
+            mock_subprocess_run.assert_called_once_with(
+                ['taskkill', '/IM', 'test.exe'],
+                capture_output=True,
+                text=True
+            )
+
+            mock_subprocess_run.reset_mock()
+
+            result = find_and_terminate('test.exe', force_kill=True)
+            assert result is True
+            mock_subprocess_run.assert_called_once_with(
+                ['taskkill', '/F', '/IM', 'test.exe'],
+                capture_output=True,
+                text=True
+            )
+
+    def test_find_and_terminate_linux(self, mock_subprocess_run):
+        with patch('platform.system', return_value='Linux'):
+            result = find_and_terminate('test')
+            assert result is True
+            mock_subprocess_run.assert_called_once_with(
+                ['pkill', '-f', 'test'],
+                capture_output=True,
+                text=True
+            )
+
+            mock_subprocess_run.reset_mock()
+
+            result = find_and_terminate('test', force_kill=True)
+            assert result is True
+            mock_subprocess_run.assert_called_once_with(
+                ['pkill', '-9', '-f', 'test'],
+                capture_output=True,
+                text=True
+            )
+
+    def test_process_not_found(self, mock_subprocess_run):
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+
+        if platform.system().lower() == 'windows':
+            mock_result.stderr = 'ERROR: The process \'test.exe\' not found.'
+        else:
+            mock_result.stderr = ""
+
+        mock_subprocess_run.return_value = mock_result
+        result = find_and_terminate('test.exe')
+        assert result is False
+
+    def test_error_handling(self, mock_subprocess_run):
+        mock_subprocess_run.side_effect = Exception('Test error')
+        result = find_and_terminate('test.exe')
+        assert result is False
+
+    def test_unsupported_os(self):
+        with patch('platform.system', return_value='Unknown'):
+            result = find_and_terminate('test.exe')
+            assert result is False
+
+
+if __name__ == "__main__":
+    pytest.main(['-v', __file__])
