@@ -15,7 +15,9 @@ wheels/
 .*-guidelines
 
 # Virtual environments
-.venv
+.venv/
+.idea/
+.pytest_cache/
 
 # Temporary files
 bin/
