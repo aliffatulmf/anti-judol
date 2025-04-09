@@ -16,19 +16,9 @@ if (-not (Test-Path -Path "./bin")) {
 }
 
 Write-Host "Installing uv using the official installer..." -ForegroundColor Cyan
-try {
-    Invoke-WebRequest -Uri https://astral.sh/uv/install.ps1 -OutFile install.ps1
-    ./install.ps1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: Failed to install uv" -ForegroundColor Red
-        exit 1
-    }
-    Remove-Item -Path install.ps1 -Force
-}
-catch {
-    Write-Host "Error: Failed to install uv: $_" -ForegroundColor Red
-    exit 1
-}
+Invoke-WebRequest -Uri https://astral.sh/uv/install.ps1 -OutFile install.ps1
+./install.ps1
+Remove-Item -Path install.ps1 -Force
 
 $env:PATH = "$HOME\.local\bin;$env:PATH"
 
