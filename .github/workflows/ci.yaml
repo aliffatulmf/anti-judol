@@ -43,3 +43,44 @@ jobs:
         shell: powershell
         run: |
           ./.venv/Scripts/python -m pytest tests/ -v -k "not download" --cov=anti_judol --cov-report=xml
+
+      - name: Run benchmarks (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # Set working directory
+          WORKSPACE_DIR="$(pwd)"
+          BENCHMARK_DIR="$WORKSPACE_DIR/tests/benchmark"
+          PYTHON_PATH="$WORKSPACE_DIR/.venv/bin/python"
+
+          if [ -d "$BENCHMARK_DIR" ] && [ "$(ls -A $BENCHMARK_DIR)" ]; then
+            echo "Running benchmarks..."
+            for benchmark in "$BENCHMARK_DIR"/test_*.py; do
+              "$PYTHON_PATH" "$benchmark"
+            done
+          else
+            echo "No benchmarks found in $BENCHMARK_DIR directory"
+          fi
+
+      - name: Run benchmarks (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          # Set working directory
+          $workspaceDir = Get-Location
+          $benchmarkDir = Join-Path -Path $workspaceDir -ChildPath "tests\benchmark"
+          $pythonPath = Join-Path -Path $workspaceDir -ChildPath ".venv\Scripts\python.exe"
+
+          if (Test-Path -Path $benchmarkDir -PathType Container) {
+            $files = Get-ChildItem -Path $benchmarkDir -Filter "test_*.py"
+            if ($files.Count -gt 0) {
+              Write-Host "Running benchmarks..."
+              foreach ($file in $files) {
+                & $pythonPath $file.FullName
+              }
+            } else {
+              Write-Host "No benchmark files found in $benchmarkDir directory"
+            }
+          } else {
+            Write-Host "Benchmark directory does not exist"
+          }

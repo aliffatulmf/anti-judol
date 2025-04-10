@@ -1,51 +1,49 @@
 import re
 import logging
-from typing import List, Set
+import string
 from functools import lru_cache
 
-import pandas as pd
 from unidecode import unidecode
 from nlp_id.lemmatizer import Lemmatizer
 from nlp_id.stopword import StopWord
+from nlp_id.tokenizer import Tokenizer
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-
 def merge_words(text: str) -> str:
     assert isinstance(text, str), 'Input must be string'
 
     tokens = text.split()
-    buffer = []
     result = []
+    buffer = []
+
     for token in tokens:
         if len(token) == 1:
             buffer.append(token)
         else:
             if buffer:
                 result.append(''.join(buffer))
-                buffer = []
+                buffer.clear()
             result.append(token)
+
     if buffer:
         result.append(''.join(buffer))
+
     return ' '.join(result)
 
 class TextNormalizer:
-    CHARS_TO_REMOVE: str = 'ᆢ【】'
-
-    PUNCT_PATTERN: str = r'[^\w\s]'
-    SPACE_PATTERN: str = r'\s+'
-    INNER_PUNCT_PATTERN: str = r'(?<=\w)([^\w\s]+)(?=\w)'
+    CHARS_TO_REMOVE = 'ᆢ【】'
 
     def __init__(self) -> None:
-        self.translation_table: dict = str.maketrans('', '', self.CHARS_TO_REMOVE)
-        self._lemma_cache: dict = {}
+        self.sym_table = str.maketrans({char: ' ' for char in self.CHARS_TO_REMOVE})
+        self.punct_table = str.maketrans({char: ' ' for char in string.punctuation})
 
         try:
             self.lemmatizer = Lemmatizer()
-            self.stopword = StopWord()
-            self.stopwords: Set[str] = set(self.stopword.get_stopword())
+            self.stopwords = set(StopWord().get_stopword())
+            self.tokenizer = Tokenizer()
         except ImportError as e:
             logger.error(f'Missing dependency: {e}')
             raise ImportError('Failed to initialize nlp_id')
@@ -53,7 +51,7 @@ class TextNormalizer:
             logger.error(f'Failed to initialize TextNormalizer: {e}')
             raise RuntimeError(f'Initialization failed: {e}')
 
-    @lru_cache(maxsize=10000)
+    @lru_cache(maxsize=128)
     def lemmatize(self, text: str) -> str:
         assert isinstance(text, str), 'Input must be string'
 
@@ -61,14 +59,10 @@ class TextNormalizer:
             if not text:
                 return ''
 
-            tokens: List[str] = text.split()
-            lemmatized_tokens: List[str] = []
+            tokens = self.tokenizer.tokenize(text)
+            tokens = [self.lemmatizer.lemmatize(token) for token in tokens]
 
-            for token in tokens:
-                lemma = self.lemmatizer.lemmatize(token)
-                lemmatized_tokens.append(lemma)
-
-            return ' '.join(lemmatized_tokens)
+            return ' '.join(tokens)
 
         except Exception as e:
             logger.error(f'Error in lemmatization: {e}')
@@ -81,38 +75,31 @@ class TextNormalizer:
             if not text:
                 return ''
 
-            tokens: List[str] = text.split()
-            filtered: List[str] = [
+            tokens = text.split()
+            tokens = [
                 word for word in tokens
                 if word.lower() not in self.stopwords
             ]
-            return ' '.join(filtered)
+            return ' '.join(tokens)
 
         except Exception as e:
             logger.error(f'Error removing stopwords: {e}')
-            return text
-
-    def _smart_inner_punct(self, text: str) -> str:
-        assert isinstance(text, str), 'Input must be string'
-
-        try:
-            return re.sub(self.INNER_PUNCT_PATTERN, ' ', text)
-        except Exception as e:
-            logger.error(f'Error in smart punctuation: {e}')
             return text
 
     def sanitize(self, text: str) -> str:
         assert isinstance(text, str), 'Input must be string'
 
         try:
-            text = text.lower()
-            text = unidecode(text)
-            text = self._smart_inner_punct(text)
-            text = re.sub(self.PUNCT_PATTERN, ' ', text)
-            text = re.sub(self.SPACE_PATTERN, ' ', text)
+            if not text.strip():
+                return ''
+
+            text = text.translate(self.sym_table)
+            text = unidecode(text).lower()
+            text = text.translate(self.punct_table)
+            text = re.sub(r'\s+', ' ', text)
+            text = merge_words(text)
 
             return text.strip()
-
         except Exception as e:
             logger.error(f'Error in text cleaning: {e}')
             return ''
@@ -125,7 +112,6 @@ class TextNormalizer:
             return ''
 
         try:
-            text = text.translate(self.translation_table)
             text = self.sanitize(text)
 
             if not text:
@@ -142,42 +128,10 @@ class TextNormalizer:
             if not text:
                 return ''
 
-            text = merge_words(text)
-
             return text.strip()
         except Exception as e:
             logger.error(f'Error in normalization: {e}')
             return ''
-
-    def normalize_series(self, texts: pd.Series) -> pd.Series:
-        assert isinstance(texts, pd.Series), 'Input must be pandas Series'
-
-        try:
-            texts = texts.fillna('')
-            return texts.apply(lambda x: self.normalize(x) if x else '')
-        except Exception as e:
-            logger.error(f'Error in series normalization: {e}')
-            return pd.Series([''] * len(texts))
-
-    def batch_normalize(
-        self,
-        texts: List[str],
-        batch_size: int = 32
-    ) -> List[str]:
-        assert isinstance(texts, list), 'Input must be list'
-        assert isinstance(batch_size, int) and batch_size > 0, 'Batch size must be a positive integer'
-
-        try:
-            results: List[str] = []
-            for i in range(0, len(texts), batch_size):
-                batch = texts[i:i + batch_size]
-                normalized = [self.normalize(text) for text in batch]
-                results.extend(normalized)
-            return results
-
-        except Exception as e:
-            logger.error(f'Error in batch normalization: {e}')
-            return [''] * len(texts)
 
     def __call__(self, text: str) -> str:
         assert isinstance(text, str), 'Input must be string'

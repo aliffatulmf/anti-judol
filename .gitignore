@@ -11,9 +11,6 @@ wheels/
 *.joblib
 *.pt
 
-# IDE-specific files
-.*-guidelines
-
 # Virtual environments
 .venv/
 .idea/
